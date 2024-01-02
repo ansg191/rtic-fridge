@@ -1,0 +1,47 @@
+[package]
+name = "rtic-fridge"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = []
+
+# Enables defmt logging on panic. Enabling this will bring core::fmt into binary.
+panic-print = ["panic-probe/print-defmt"]
+
+# Prevents inlining of some functions to visualize function size using cargo-bloat
+sizing = []
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+defmt = { version = "0.3.5", features = ["encoding-rzcobs"] }
+defmt-rtt = "0.4.0"
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
+#embedded-hal-1 = { package = "embedded-hal", version = "1.0.0-rc.3" }
+fixed = { version = "1.24.0", features = ["num-traits"] }
+fugit = { version = "0.3.7", features = ["defmt"] }
+heapless = "0.8.0"
+log = "0.4.20"
+nb = "1.1.0"
+panic-probe = "0.3.1"
+pid = "4.0.0"
+rtic = { version = "2.0.1", features = ["thumbv6-backend"] }
+rtic-monotonics = { version = "1.4.1", features = ["stm32f042k6", "stm32_tim2"] }
+rtic-sync = "1.1.1"
+stm32f0xx-hal = { version = "0.18.0", features = ["stm32f042", "rt"] }
+void = { version = "1.0.2", default-features = false }
+
+[patch.crates-io]
+cortex-m = { git = "https://github.com/ansg191/cortex-m.git", branch = "v0.7.x" }
+pid = { git = "https://github.com/braincore/pid-rs" }
+
+[profile.dev]
+opt-level = "z"
+
+[profile.release]
+opt-level = "z"
+lto = true
+debug = true
+codegen-units = 1
