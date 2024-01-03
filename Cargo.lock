@@ -435,6 +435,7 @@ dependencies = [
  "heapless",
  "log",
  "nb 1.1.0",
+ "num-traits",
  "panic-probe",
  "pid",
  "rtic",

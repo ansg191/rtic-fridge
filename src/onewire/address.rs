@@ -6,7 +6,7 @@ use defmt::Format;
 pub struct Address(pub u64);
 
 impl Address {
-    pub fn family_code(&self) -> u8 {
+    pub const fn family_code(self) -> u8 {
         self.0.to_le_bytes()[0]
     }
 }
@@ -19,6 +19,6 @@ impl core::fmt::Debug for Address {
 
 impl Format for Address {
     fn format(&self, f: defmt::Formatter<'_>) {
-        defmt::write!(f, "{=u64:016X}", self.0)
+        defmt::write!(f, "{=u64:016X}", self.0);
     }
 }

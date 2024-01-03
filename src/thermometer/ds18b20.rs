@@ -1,6 +1,7 @@
 use core::convert::Infallible;
 
 use embedded_hal::blocking::delay::DelayUs;
+use num_traits::AsPrimitive;
 use rtic_monotonics::stm32::{Tim2 as Mono, *};
 
 use crate::{
@@ -26,20 +27,20 @@ impl<D: DelayUs<u32>, const N: usize> Ds18b20Thermometer<D, N> {
         }
     }
 
-    pub fn wire(&self) -> &OneWire {
+    pub const fn wire(&self) -> &OneWire {
         &self.ow
     }
     pub fn wire_mut(&mut self) -> &mut OneWire {
         &mut self.ow
     }
 
-    pub fn resolution(&self) -> Resolution {
+    pub const fn resolution(&self) -> Resolution {
         self.resolution
     }
     pub fn set_resolution(&mut self, resolution: Resolution) -> Result<(), Error<Infallible>> {
         self.resolution = resolution;
 
-        for therm in self.therms.iter_mut() {
+        for therm in &mut self.therms {
             therm.set_resolution(&mut self.ow, &mut self.delay, resolution)?;
         }
 
@@ -62,7 +63,7 @@ impl<D: DelayUs<u32>, const N: usize> Ds18b20Thermometer<D, N> {
     }
 }
 
-impl<D: DelayUs<u32>, const N: usize> Thermometer for Ds18b20Thermometer<D, N> {
+impl<D: DelayUs<u32> + Send, const N: usize> Thermometer for Ds18b20Thermometer<D, N> {
     type Error = Error<Infallible>;
 
     async fn read(&mut self) -> Result<Temperature, Self::Error> {
@@ -75,7 +76,7 @@ impl<D: DelayUs<u32>, const N: usize> Thermometer for Ds18b20Thermometer<D, N> {
         let delay = self.resolution.conversion_time();
         Mono::delay(u64::from(delay).millis()).await;
 
-        for therm in self.therms.iter() {
+        for therm in &self.therms {
             let temp = therm.read_data(&mut self.ow, &mut self.delay)?;
             unsafe {
                 temps.push_unchecked(temp);
@@ -85,7 +86,8 @@ impl<D: DelayUs<u32>, const N: usize> Thermometer for Ds18b20Thermometer<D, N> {
         if temps.is_empty() {
             Err(Error::Timeout)
         } else {
-            Ok(temps.iter().sum::<Temperature>() / temps.len() as i32)
+            let len: i32 = temps.len().as_();
+            Ok(temps.iter().sum::<Temperature>() / len)
         }
     }
 }

@@ -17,7 +17,7 @@ pub const WRITE_SCRATCHPAD: u8 = 0x4E;
 pub const COPY_SCRATCHPAD: u8 = 0x48;
 pub const RECALL_E2: u8 = 0xB8;
 
-#[derive(Debug, Format, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Format, Clone, Eq, PartialEq)]
 pub struct Ds18b20 {
     addr: Address,
 }
@@ -33,7 +33,7 @@ impl Ds18b20 {
         wire: &mut OneWire,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<[u8; 9], Error<Infallible>> {
-        wire.send_command(Some(&self.addr), READ_SCRATCHPAD, delay)?;
+        wire.send_command(Some(self.addr), READ_SCRATCHPAD, delay)?;
 
         let mut buf = [0u8; 9];
         for x in &mut buf {
@@ -51,7 +51,7 @@ impl Ds18b20 {
         delay: &mut impl DelayUs<u32>,
         data: [u8; 3],
     ) -> Result<(), Error<Infallible>> {
-        wire.send_command(Some(&self.addr), WRITE_SCRATCHPAD, delay)?;
+        wire.send_command(Some(self.addr), WRITE_SCRATCHPAD, delay)?;
         wire.write_byte(data[0], delay)?;
         wire.write_byte(data[1], delay)?;
         wire.write_byte(data[2], delay)?;
@@ -92,7 +92,7 @@ impl Ds18b20 {
         wire: &mut OneWire,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), Error<Infallible>> {
-        wire.send_command(Some(&self.addr), CONVERT_T, delay)
+        wire.send_command(Some(self.addr), CONVERT_T, delay)
     }
 
     /// Reads the temperature data from the sensor
@@ -120,11 +120,14 @@ impl Ds18b20 {
     /// Asynchronously Measures the temperature
     ///
     /// Performs a temperature conversion, waits for the conversion to finish, and reads the result.
-    pub async fn measure(
+    pub async fn measure<D>(
         &mut self,
         wire: &mut OneWire,
-        delay: &mut impl DelayUs<u32>,
-    ) -> Result<Temperature, Error<Infallible>> {
+        delay: &mut D,
+    ) -> Result<Temperature, Error<Infallible>>
+    where
+        D: DelayUs<u32> + Send,
+    {
         let d = u64::from(self.resolution(wire, delay)?.conversion_time());
         self.start_measurement(wire, delay)?;
 
@@ -143,32 +146,32 @@ pub enum Resolution {
 }
 
 impl Resolution {
-    fn from_config_register(reg: u8) -> Option<Resolution> {
+    const fn from_config_register(reg: u8) -> Option<Self> {
         match reg {
-            0b0001_1111 => Some(Resolution::Bits9),
-            0b0011_1111 => Some(Resolution::Bits10),
-            0b0101_1111 => Some(Resolution::Bits11),
-            0b0111_1111 => Some(Resolution::Bits12),
+            0b0001_1111 => Some(Self::Bits9),
+            0b0011_1111 => Some(Self::Bits10),
+            0b0101_1111 => Some(Self::Bits11),
+            0b0111_1111 => Some(Self::Bits12),
             _ => None,
         }
     }
 
-    pub fn to_config_register(self) -> u8 {
+    pub const fn to_config_register(self) -> u8 {
         match self {
-            Resolution::Bits9 => 0b0001_1111,
-            Resolution::Bits10 => 0b0011_1111,
-            Resolution::Bits11 => 0b0101_1111,
-            Resolution::Bits12 => 0b0111_1111,
+            Self::Bits9 => 0b0001_1111,
+            Self::Bits10 => 0b0011_1111,
+            Self::Bits11 => 0b0101_1111,
+            Self::Bits12 => 0b0111_1111,
         }
     }
 
     /// Returns the minimum conversion time in milliseconds
-    pub fn conversion_time(self) -> u16 {
+    pub const fn conversion_time(self) -> u16 {
         match self {
-            Resolution::Bits9 => 94,
-            Resolution::Bits10 => 188,
-            Resolution::Bits11 => 375,
-            Resolution::Bits12 => 750,
+            Self::Bits9 => 94,
+            Self::Bits10 => 188,
+            Self::Bits11 => 375,
+            Self::Bits12 => 750,
         }
     }
 }

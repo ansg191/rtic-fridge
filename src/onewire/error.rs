@@ -20,14 +20,14 @@ pub enum Error<E> {
 }
 
 impl<E> Error<E> {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            Error::BusNotHigh => "Bus not high",
-            Error::Pin(_) => "Pin error",
-            Error::UnexpectedResponse => "Unexpected response",
-            Error::FamilyCodeMismatch => "Family code mismatch",
-            Error::CrcMismatch => "CRC mismatch",
-            Error::Timeout => "Timeout",
+            Self::BusNotHigh => "Bus not high",
+            Self::Pin(_) => "Pin error",
+            Self::UnexpectedResponse => "Unexpected response",
+            Self::FamilyCodeMismatch => "Family code mismatch",
+            Self::CrcMismatch => "CRC mismatch",
+            Self::Timeout => "Timeout",
         }
     }
 }

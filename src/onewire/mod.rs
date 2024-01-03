@@ -18,7 +18,7 @@ pub struct OneWire {
 }
 
 impl OneWire {
-    pub fn new(pin: Pin<Output<OpenDrain>>) -> Self {
+    pub const fn new(pin: Pin<Output<OpenDrain>>) -> Self {
         Self { pin }
     }
 
@@ -59,6 +59,7 @@ impl OneWire {
         bit: bool,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), Infallible> {
+        #[allow(clippy::branches_sharing_code, reason = "it is more readable this way")]
         if bit {
             // Write a 1
 
@@ -161,7 +162,7 @@ impl OneWire {
     /// Do a ROM select
     pub fn select_address(
         &mut self,
-        device: &Address,
+        device: Address,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), Infallible> {
         self.write_byte(commands::MATCH_ROM, delay)?;
@@ -196,7 +197,7 @@ impl OneWire {
     /// 3. Write the command byte
     pub fn send_command(
         &mut self,
-        address: Option<&Address>,
+        address: Option<Address>,
         command: u8,
         delay: &mut impl DelayUs<u32>,
     ) -> Result<(), Infallible> {
@@ -245,10 +246,7 @@ impl<D: DelayUs<u32>> DeviceSearch<'_, '_, D> {
                 }
 
                 // All coupled devices have 0 or 1
-                let search_direction = if id_bit != cmp_id_bit {
-                    // Bit write value for search
-                    id_bit
-                } else {
+                let search_direction = if id_bit == cmp_id_bit {
                     // If this discrepancy if before the Last Discrepancy
                     // on a previous next then pick the same as last time
                     let sd = if id_bit_number < self.last_discrepancy {
@@ -269,6 +267,9 @@ impl<D: DelayUs<u32>> DeviceSearch<'_, '_, D> {
                     }
 
                     sd
+                } else {
+                    // Bit write value for search
+                    id_bit
                 };
 
                 // Set or clear the bit in the ROM byte rom_byte_number

@@ -43,7 +43,7 @@ pub fn terminal<W: Write>(
 
         // Pop line from buffer
         let mut line = Vec::<_, BUFFER_SIZE>::new();
-        for _ in 0..(idx + 1) {
+        for _ in 0..=idx {
             // SAFETY: idx is guaranteed to be valid in buffer
             // line is guaranteed to be large enough to hold idx + 1 bytes
             unsafe {
@@ -85,10 +85,13 @@ pub fn terminal<W: Write>(
                 Some(b) => unknown_argument(tx, b),
             },
             Some(b"cooler") => match args.next() {
-                None | Some(&[]) => match unwrap!(cooler.is_set_high()) {
-                    true => print_uart(tx, "on\r\n"),
-                    false => print_uart(tx, "off\r\n"),
-                },
+                None | Some(&[]) => {
+                    if unwrap!(cooler.is_set_high()) {
+                        print_uart(tx, "on\r\n");
+                    } else {
+                        print_uart(tx, "off\r\n");
+                    }
+                }
                 Some(b"on") => {
                     unwrap!(cooler.set_high());
                     print_uart(tx, OK_STR);
@@ -116,9 +119,8 @@ pub fn terminal<W: Write>(
 }
 
 fn print_uart<W: Write>(tx: &mut W, str: &str) {
-    match tx.write_str(str) {
-        Ok(_) => {}
-        Err(_) => defmt::panic!("Failed to write to UART"),
+    if tx.write_str(str).is_err() {
+        defmt::panic!("Failed to write to UART");
     }
 }
 
@@ -131,12 +133,12 @@ fn unknown_argument<W: Write>(tx: &mut W, arg: &[u8]) {
 }
 
 #[inline]
-pub fn is_newline(b: u8) -> bool {
+pub const fn is_newline(b: u8) -> bool {
     b == b'\n' || b == b'\r'
 }
 
 #[inline]
-pub fn is_whitespace(b: u8) -> bool {
+pub const fn is_whitespace(b: u8) -> bool {
     b == b' ' || b == b'\n' || b == b'\r' || b == b'\t'
 }
 

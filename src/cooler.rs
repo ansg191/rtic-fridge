@@ -11,7 +11,7 @@ pub struct PinCooler<PIN: StatefulOutputPin> {
 }
 
 impl<PIN: StatefulOutputPin> PinCooler<PIN> {
-    pub fn new(pin: PIN) -> Self {
+    pub const fn new(pin: PIN) -> Self {
         Self { pin }
     }
 }

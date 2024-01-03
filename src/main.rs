@@ -1,7 +1,8 @@
 #![feature(type_alias_impl_trait, lint_reasons)]
 #![no_std]
 #![no_main]
-#![allow(dead_code)]
+#![warn(clippy::pedantic, clippy::nursery)]
+#![allow(dead_code, clippy::module_name_repetitions, clippy::wildcard_imports)]
 
 mod controller;
 mod cooler;
@@ -218,14 +219,14 @@ mod app {
                 }
                 Err(nb::Error::WouldBlock) => break,
                 Err(nb::Error::Other(serial::Error::Framing)) => {
-                    panic!("USART error: Framing")
+                    panic!("USART error: Framing");
                 }
                 Err(nb::Error::Other(serial::Error::Noise)) => panic!("USART error: Noise"),
                 Err(nb::Error::Other(serial::Error::Overrun)) => {
-                    panic!("USART error: Overrun")
+                    panic!("USART error: Overrun");
                 }
                 Err(nb::Error::Other(serial::Error::Parity)) => {
-                    panic!("USART error: Parity")
+                    panic!("USART error: Parity");
                 }
 
                 Err(nb::Error::Other(_)) => defmt::panic!("USART error: Unknown"),

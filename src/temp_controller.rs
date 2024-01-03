@@ -46,7 +46,7 @@ pub async fn temp_controller<'a>(
         }
 
         match temp_controller_inner(&mut cx, &mut delay).await {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(e) => {
                 error!("Error: {}", e);
             }
