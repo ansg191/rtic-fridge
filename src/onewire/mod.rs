@@ -239,8 +239,6 @@ impl<D: DelayUs<u32>> DeviceSearch<'_, '_, D> {
                 let id_bit = self.wire.read_bit(self.delay)?;
                 let cmp_id_bit = self.wire.read_bit(self.delay)?;
 
-                defmt::trace!("id_bit: {=bool}, cmp_id_bit: {=bool}", id_bit, cmp_id_bit);
-
                 // Check for no devices on the bus
                 if id_bit && cmp_id_bit {
                     break;
