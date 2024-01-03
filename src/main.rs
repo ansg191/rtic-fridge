@@ -221,17 +221,7 @@ mod app {
 
     #[task(priority = 2, shared = [usart, buffer, cooler, resolution, storage])]
     async fn terminal(cx: terminal::Context) {
-        let usart = cx.shared.usart;
-        let buffer = cx.shared.buffer;
-        let cooler = cx.shared.cooler;
-        let resolution = cx.shared.resolution;
-        let storage = cx.shared.storage;
-
-        (usart, buffer, cooler, resolution, storage).lock(
-            |usart, buffer, cooler, resolution, storage| {
-                crate::terminal::terminal(usart, buffer, cooler, resolution, storage);
-            },
-        );
+        crate::terminal::terminal(cx);
     }
 
     #[task(binds = USART2, local = [times: u32 = 0], shared = [usart, buffer])]
