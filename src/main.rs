@@ -21,10 +21,14 @@ const WATER_TEMP_ADDR: onewire::Address = onewire::Address(0x05_00_00_0F_83_FB_6
 
 #[rtic::app(device = stm32f0xx_hal::pac, dispatchers = [USART1, TIM14])]
 mod app {
-    use defmt::{panic, *};
+    use defmt::{panic, unreachable, *};
     use rtic_monotonics::{
         stm32::{Tim2 as Mono, *},
         Monotonic,
+    };
+    use rtic_sync::{
+        channel::{ReceiveError, Receiver, Sender},
+        make_channel,
     };
     use stm32f0xx_hal::{
         delay::Delay,
@@ -44,7 +48,9 @@ mod app {
         cooler::PinCooler,
         ds18b20::{Ds18b20, Resolution},
         onewire::OneWire,
+        storage::Storage,
         terminal::is_newline,
+        thermometer::Temperature,
         WATER_TEMP_ADDR,
     };
 
@@ -54,6 +60,7 @@ mod app {
         buffer: heapless::Deque<u8, { crate::terminal::BUFFER_SIZE }>,
         cooler: PinCooler<Pin<Output<PushPull>>>,
         resolution: Resolution,
+        storage: Storage<100>,
     }
 
     #[local]
@@ -64,6 +71,7 @@ mod app {
         wire: OneWire,
         water_temp: Ds18b20,
         pid: PidController,
+        tx: Sender<'static, Temperature, 1>,
     }
 
     #[init]
@@ -132,6 +140,15 @@ mod app {
         // Launch temperature controller
         let _ = temp_controller::spawn(delay);
 
+        // Setup channels
+        let (tx, rx) = make_channel!(Temperature, 1);
+
+        // Setup Storage
+        let storage = Storage::new();
+
+        // Launch storage task
+        let _ = storage::spawn(rx);
+
         (
             Shared {
                 // delay,
@@ -139,12 +156,14 @@ mod app {
                 buffer: heapless::Deque::new(),
                 cooler,
                 resolution: Resolution::Bits12,
+                storage,
             },
             Local {
                 // ds18b20,
                 wire,
                 water_temp,
                 pid,
+                tx,
             },
         )
     }
@@ -180,21 +199,39 @@ mod app {
         }
     }
 
-    #[task(priority = 2, local = [wire, water_temp, pid], shared = [cooler, resolution])]
+    #[task(priority = 2, local = [wire, water_temp, pid, tx], shared = [cooler, resolution])]
     async fn temp_controller(cx: temp_controller::Context, delay: Delay) {
         crate::temp_controller::temp_controller(cx, delay).await;
     }
 
-    #[task(priority = 2, shared = [usart, buffer, cooler, resolution])]
+    #[task(priority = 1, shared = [storage])]
+    async fn storage(mut cx: storage::Context, mut rx: Receiver<'static, Temperature, 1>) {
+        loop {
+            let temp = match rx.recv().await {
+                Ok(temp) => temp,
+                Err(ReceiveError::Empty) => continue,
+                Err(ReceiveError::NoSender) => unreachable!("Sender dropped"),
+            };
+
+            cx.shared.storage.lock(|storage| {
+                storage.write(temp);
+            });
+        }
+    }
+
+    #[task(priority = 2, shared = [usart, buffer, cooler, resolution, storage])]
     async fn terminal(cx: terminal::Context) {
         let usart = cx.shared.usart;
         let buffer = cx.shared.buffer;
         let cooler = cx.shared.cooler;
         let resolution = cx.shared.resolution;
+        let storage = cx.shared.storage;
 
-        (usart, buffer, cooler, resolution).lock(|usart, buffer, cooler, resolution| {
-            crate::terminal::terminal(usart, buffer, cooler, resolution);
-        });
+        (usart, buffer, cooler, resolution, storage).lock(
+            |usart, buffer, cooler, resolution, storage| {
+                crate::terminal::terminal(usart, buffer, cooler, resolution, storage);
+            },
+        );
     }
 
     #[task(binds = USART2, local = [times: u32 = 0], shared = [usart, buffer])]

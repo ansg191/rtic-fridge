@@ -1,5 +1,6 @@
 use fixed::types::I6F2;
 use heapless::HistoryBuffer;
+use num_traits::AsPrimitive;
 use rtic_monotonics::{stm32::Tim2 as Mono, Monotonic};
 
 use crate::thermometer::Temperature;
@@ -44,7 +45,7 @@ impl Temp {
     #[inline]
     fn now(value: I6F2) -> Self {
         let secs = Mono::now().duration_since_epoch().to_secs();
-        Self::new(secs as u32, value)
+        Self::new(secs.as_(), value)
     }
 
     #[inline]

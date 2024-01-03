@@ -7,7 +7,7 @@ use stm32f0xx_hal::{
     prelude::*,
 };
 
-use crate::{cooler::PinCooler, ds18b20::Resolution};
+use crate::{cooler::PinCooler, ds18b20::Resolution, storage::Storage};
 
 pub const BUFFER_SIZE: usize = 32;
 const OK_STR: &str = "ok\r\n";
@@ -28,11 +28,12 @@ const OK_STR: &str = "ok\r\n";
 /// - `erase` - Erase the flash storage
 /// - `reset` - Reset the MCU
 #[cfg_attr(feature = "sizing", inline(never))]
-pub fn terminal<W: Write>(
+pub fn terminal<W: Write, const N: usize>(
     tx: &mut W,
     buffer: &mut Deque<u8, BUFFER_SIZE>,
     cooler: &mut PinCooler<Pin<Output<PushPull>>>,
     resolution: &mut Resolution,
+    _storage: &mut Storage<N>,
 ) {
     loop {
         // Find newline
