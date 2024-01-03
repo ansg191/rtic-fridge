@@ -183,14 +183,15 @@ mod app {
         crate::temp_controller::temp_controller(cx, delay).await;
     }
 
-    #[task(priority = 2, shared = [usart, buffer, cooler])]
+    #[task(priority = 2, shared = [usart, buffer, cooler, resolution])]
     async fn terminal(cx: terminal::Context) {
         let usart = cx.shared.usart;
         let buffer = cx.shared.buffer;
         let cooler = cx.shared.cooler;
+        let resolution = cx.shared.resolution;
 
-        (usart, buffer, cooler).lock(|usart, buffer, cooler| {
-            crate::terminal::terminal(usart, buffer, cooler);
+        (usart, buffer, cooler, resolution).lock(|usart, buffer, cooler, resolution| {
+            crate::terminal::terminal(usart, buffer, cooler, resolution);
         });
     }
 

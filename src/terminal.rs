@@ -7,9 +7,10 @@ use stm32f0xx_hal::{
     prelude::*,
 };
 
-use crate::cooler::PinCooler;
+use crate::{cooler::PinCooler, ds18b20::Resolution};
 
 pub const BUFFER_SIZE: usize = 32;
+const OK_STR: &str = "ok\r\n";
 
 /// Terminal handler
 ///
@@ -31,6 +32,7 @@ pub fn terminal<W: Write>(
     tx: &mut W,
     buffer: &mut Deque<u8, BUFFER_SIZE>,
     cooler: &mut PinCooler<Pin<Output<PushPull>>>,
+    resolution: &mut Resolution,
 ) {
     loop {
         // Find newline
@@ -57,6 +59,31 @@ pub fn terminal<W: Write>(
         match args.next() {
             None | Some(&[]) => trace!("Empty command"),
             Some(b"help") => print_uart(tx, HELP_STR),
+            Some(b"resolution") => match args.next() {
+                None | Some(&[]) => match *resolution {
+                    Resolution::Bits9 => print_uart(tx, "9\r\n"),
+                    Resolution::Bits10 => print_uart(tx, "10\r\n"),
+                    Resolution::Bits11 => print_uart(tx, "11\r\n"),
+                    Resolution::Bits12 => print_uart(tx, "12\r\n"),
+                },
+                Some(b"9") => {
+                    *resolution = Resolution::Bits9;
+                    print_uart(tx, OK_STR);
+                }
+                Some(b"10") => {
+                    *resolution = Resolution::Bits10;
+                    print_uart(tx, OK_STR);
+                }
+                Some(b"11") => {
+                    *resolution = Resolution::Bits11;
+                    print_uart(tx, OK_STR);
+                }
+                Some(b"12") => {
+                    *resolution = Resolution::Bits12;
+                    print_uart(tx, OK_STR);
+                }
+                Some(b) => unknown_argument(tx, b),
+            },
             Some(b"cooler") => match args.next() {
                 None | Some(&[]) => match unwrap!(cooler.is_set_high()) {
                     true => print_uart(tx, "on\r\n"),
@@ -64,17 +91,13 @@ pub fn terminal<W: Write>(
                 },
                 Some(b"on") => {
                     unwrap!(cooler.set_high());
-                    print_uart(tx, "ok\r\n");
+                    print_uart(tx, OK_STR);
                 }
                 Some(b"off") => {
                     unwrap!(cooler.set_low());
-                    print_uart(tx, "ok\r\n");
+                    print_uart(tx, OK_STR);
                 }
-                Some(b) => {
-                    print_uart(tx, "Unknown argument: '");
-                    print_uart(tx, unsafe { core::str::from_utf8_unchecked(b) });
-                    print_uart(tx, "'\r\n");
-                }
+                Some(b) => unknown_argument(tx, b),
             },
             Some(b"reset") => {
                 print_uart(tx, "Resetting...\r\n");
@@ -97,6 +120,14 @@ fn print_uart<W: Write>(tx: &mut W, str: &str) {
         Ok(_) => {}
         Err(_) => defmt::panic!("Failed to write to UART"),
     }
+}
+
+fn unknown_argument<W: Write>(tx: &mut W, arg: &[u8]) {
+    print_uart(tx, "Unknown argument: '");
+    // SAFETY: b may not be valid UTF-8, but we don't care cause we're just printing it
+    // Also, including UTF8 checks would add a lot to the binary size
+    print_uart(tx, unsafe { core::str::from_utf8_unchecked(arg) });
+    print_uart(tx, "'\r\n");
 }
 
 #[inline]
