@@ -2,7 +2,7 @@
 
 use core::convert::Infallible;
 
-use defmt::{panic, *};
+use defmt::{panic, unreachable, *};
 use embedded_hal::blocking::delay::DelayUs;
 use rtic::Mutex;
 use rtic_monotonics::{
@@ -81,6 +81,10 @@ async fn temp_controller_inner<'a>(
             cooler.set_low()
         }
     })?;
+
+    if cx.local.tx.send(temp).await.is_err() {
+        unreachable!("Receiver dropped");
+    }
 
     Ok(())
 }
