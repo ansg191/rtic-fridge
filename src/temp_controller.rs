@@ -9,12 +9,12 @@ use rtic_monotonics::{
     stm32::{Tim2 as Mono, *},
     Monotonic,
 };
-use stm32f0xx_hal::prelude::*;
+use stm32f0xx_hal::{delay::Delay, prelude::*};
 
 use crate::{
     controller::{pid::PidController, Controller},
     onewire::{Address, Error},
-    thermometer::{ds18b20::Ds18b20Thermometer, Temperature, Thermometer},
+    thermometer::{ds18b20::Ds18b20Thermometer, Temperature},
 };
 
 pub const TARGET_TEMP: Temperature = Temperature::const_from_int(5);
@@ -24,14 +24,28 @@ const KD: Temperature = Temperature::from_bits(1 << 1);
 
 #[allow(clippy::needless_lifetimes, reason = "clippy bug")]
 #[cfg_attr(feature = "sizing", inline(never))]
-pub async fn temp_controller<'a>(mut cx: crate::app::temp_controller::Context<'a>) {
+pub async fn temp_controller<'a>(
+    mut cx: crate::app::temp_controller::Context<'a>,
+    mut delay: Delay,
+) {
     let mut now = Mono::now();
 
-    loop {
-        trace!("temp_controller");
+    let mut last_res = None;
 
-        // TODO: Error handling
-        match temp_controller_inner(&mut cx).await {
+    loop {
+        let resolution = cx.shared.resolution.lock(|res| *res);
+        if last_res != Some(resolution) {
+            last_res = Some(resolution);
+            cx.local
+                .water_temp
+                .set_resolution(cx.local.wire, &mut delay, resolution)
+                .unwrap_or_else(|e| {
+                    error!("Error setting resolution: {}", e);
+                    last_res = None;
+                });
+        }
+
+        match temp_controller_inner(&mut cx, &mut delay).await {
             Ok(_) => {}
             Err(e) => {
                 error!("Error: {}", e);
@@ -45,8 +59,9 @@ pub async fn temp_controller<'a>(mut cx: crate::app::temp_controller::Context<'a
 
 async fn temp_controller_inner<'a>(
     cx: &mut crate::app::temp_controller::Context<'a>,
+    delay: &mut Delay,
 ) -> Result<(), Error<Infallible>> {
-    let temp = cx.local.ds18b20.read().await?;
+    let temp = cx.local.water_temp.measure(cx.local.wire, delay).await?;
 
     let cooler_on = cx.local.pid.run(temp).await.unwrap_or_else(|e| {
         error!("Error running PID controller: {}", e);

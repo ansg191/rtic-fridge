@@ -15,6 +15,8 @@ mod thermometer;
 use defmt_rtt as _;
 use panic_probe as _;
 
+const WATER_TEMP_ADDR: onewire::Address = onewire::Address(0x05_00_00_0F_83_FB_60_28);
+
 #[rtic::app(device = stm32f0xx_hal::pac, dispatchers = [USART1, TIM14])]
 mod app {
     use defmt::{panic, *};
@@ -36,8 +38,12 @@ mod app {
     };
 
     use crate::{
-        controller::pid::PidController, cooler::PinCooler, onewire::OneWire, terminal::is_newline,
-        thermometer::ds18b20::Ds18b20Thermometer,
+        controller::pid::PidController,
+        cooler::PinCooler,
+        ds18b20::{Ds18b20, Resolution},
+        onewire::OneWire,
+        terminal::is_newline,
+        WATER_TEMP_ADDR,
     };
 
     #[shared]
@@ -45,11 +51,16 @@ mod app {
         usart: Serial<USART2, PA2<Alternate<AF1>>, PA15<Alternate<AF1>>>,
         buffer: heapless::Deque<u8, { crate::terminal::BUFFER_SIZE }>,
         cooler: PinCooler<Pin<Output<PushPull>>>,
+        resolution: Resolution,
     }
 
     #[local]
     struct Local {
-        ds18b20: Ds18b20Thermometer<Delay, 4>,
+        // ds18b20: Ds18b20Thermometer<Delay, 4>,
+
+        // Temperature Controller
+        wire: OneWire,
+        water_temp: Ds18b20,
         pid: PidController,
     }
 
@@ -75,7 +86,7 @@ mod app {
         Mono::start(24_000_000, token);
 
         // Setup systick delay
-        let delay = Delay::new(cx.core.SYST, &rcc);
+        let mut delay = Delay::new(cx.core.SYST, &rcc);
 
         // Setup GPIO
         let gpioa = cx.device.GPIOA.split(&mut rcc);
@@ -104,17 +115,20 @@ mod app {
         // Setup DS18B20
         let mut pa12 = gpioa.pa12.into_open_drain_output(&cx.cs);
         unwrap!(pa12.set_high());
-        let wire = OneWire::new(pa12.downgrade());
+        let mut wire = OneWire::new(pa12.downgrade());
 
-        let mut ds18b20 = Ds18b20Thermometer::new(wire, delay);
+        for device in wire.devices(&mut delay) {
+            let device = unwrap!(device);
+            info!("Found device: {}", device);
+        }
 
-        crate::temp_controller::add_devices(&mut ds18b20);
+        let water_temp = Ds18b20::new(WATER_TEMP_ADDR);
 
         // Setup PID
         let pid = crate::temp_controller::new_pid();
 
         // Launch temperature controller
-        let _ = temp_controller::spawn();
+        let _ = temp_controller::spawn(delay);
 
         (
             Shared {
@@ -122,8 +136,14 @@ mod app {
                 usart,
                 buffer: heapless::Deque::new(),
                 cooler,
+                resolution: Resolution::Bits12,
             },
-            Local { ds18b20, pid },
+            Local {
+                // ds18b20,
+                wire,
+                water_temp,
+                pid,
+            },
         )
     }
 
@@ -158,9 +178,9 @@ mod app {
         }
     }
 
-    #[task(priority = 2, local = [ds18b20, pid], shared = [cooler])]
-    async fn temp_controller(cx: temp_controller::Context) {
-        crate::temp_controller::temp_controller(cx).await;
+    #[task(priority = 2, local = [wire, water_temp, pid], shared = [cooler, resolution])]
+    async fn temp_controller(cx: temp_controller::Context, delay: Delay) {
+        crate::temp_controller::temp_controller(cx, delay).await;
     }
 
     #[task(priority = 2, shared = [usart, buffer, cooler])]
