@@ -31,6 +31,7 @@ pid = "4.0.0"
 rtic = { version = "2.0.1", features = ["thumbv6-backend"] }
 rtic-monotonics = { version = "1.4.1", features = ["stm32f042k6", "stm32_tim2"] }
 rtic-sync = "1.1.1"
+static_assertions = "1.1.0"
 stm32f0xx-hal = { version = "0.18.0", features = ["stm32f042", "rt"] }
 void = { version = "1.0.2", default-features = false }
 

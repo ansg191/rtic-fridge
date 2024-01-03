@@ -9,6 +9,7 @@ mod cooler;
 // mod delay;
 mod ds18b20;
 mod onewire;
+mod storage;
 mod temp_controller;
 mod terminal;
 mod thermometer;
