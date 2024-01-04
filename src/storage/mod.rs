@@ -26,6 +26,10 @@ impl<const N: usize> Storage<N> {
             iter: self.temps.oldest_ordered(),
         }
     }
+
+    pub fn recent(&self) -> Option<(u32, Temperature)> {
+        self.temps.recent().map(|temp| (*temp).into())
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -70,6 +74,12 @@ impl Temp {
     }
 }
 
+impl From<Temp> for (u32, Temperature) {
+    fn from(value: Temp) -> Self {
+        (value.secs(), value.value())
+    }
+}
+
 #[derive(Clone)]
 pub struct OldestOrdered<'a, const N: usize> {
     iter: heapless::OldestOrdered<'a, Temp, N>,
@@ -79,6 +89,6 @@ impl<'a, const N: usize> Iterator for OldestOrdered<'a, N> {
     type Item = (u32, Temperature);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|temp| (temp.secs(), temp.value()))
+        self.iter.next().map(|temp| (*temp).into())
     }
 }

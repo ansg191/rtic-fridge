@@ -10,7 +10,7 @@ use stm32f0xx_hal::prelude::*;
 use crate::{app::terminal::Context, ds18b20::Resolution, thermometer::Temperature};
 
 pub const BUFFER_SIZE: usize = 32;
-const OK_STR: &str = "ok\r\n";
+const OK_STR: &str = "<ok>\r\n";
 
 const HELP_STR: &str = "Commands:\r
     help\r
@@ -81,6 +81,19 @@ pub fn terminal(mut cx: Context<'_>) {
                 }
                 Some(b) => unknown_argument(&mut cx, b),
             },
+            Some(b"temp") => {
+                let temp = cx.shared.storage.lock(|s| s.recent());
+                if let Some((secs, temp)) = temp {
+                    cx.shared.usart.lock(|tx| {
+                        print_uint(tx, secs);
+                        print_uart_locked(tx, " ");
+                        print_temp(tx, temp);
+                        print_uart_locked(tx, "\r\n");
+                    });
+                } else {
+                    print_uart(&mut cx, "<missing>\r\n");
+                }
+            }
             Some(b"cooler") => match args.next() {
                 None | Some(&[]) => {
                     if unwrap!(cx.shared.cooler.lock(|c| c.is_set_high())) {
