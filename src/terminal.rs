@@ -1,15 +1,31 @@
 use core::fmt::Write;
 
-use defmt::*;
+use defmt::{panic, *};
 use embedded_hal::digital::v2::OutputPin;
 use heapless::{Deque, Vec};
+use num_traits::AsPrimitive;
 use rtic::Mutex;
 use stm32f0xx_hal::prelude::*;
 
-use crate::{app::terminal::Context, ds18b20::Resolution};
+use crate::{app::terminal::Context, ds18b20::Resolution, thermometer::Temperature};
 
 pub const BUFFER_SIZE: usize = 32;
 const OK_STR: &str = "ok\r\n";
+
+const HELP_STR: &str = "Commands:\r
+    help\r
+    devices\r
+    resolution <9|10|11|12>?\r
+    pid\r
+    pid <kp> <ki> <kd>\r
+    temp\r
+    cooler <on|off>?\r
+    watch temp\r
+    dump temps\r
+    dump events\r
+    erase\r
+    reset\r
+";
 
 /// Terminal handler
 ///
@@ -83,6 +99,20 @@ pub fn terminal(mut cx: Context<'_>) {
                 }
                 Some(b) => unknown_argument(&mut cx, b),
             },
+            Some(b"dump") => match args.next() {
+                None | Some(&[]) => print_uart(&mut cx, "Missing argument\r\n"),
+                Some(b"temps") => cx.shared.storage.lock(|storage| {
+                    for (secs, temp) in storage.oldest() {
+                        cx.shared.usart.lock(|tx| {
+                            print_uint(tx, secs);
+                            print_uart_locked(tx, " ");
+                            print_temp(tx, temp);
+                            print_uart_locked(tx, "\r\n");
+                        });
+                    }
+                }),
+                Some(b) => unknown_argument(&mut cx, b),
+            },
             Some(b"reset") => {
                 print_uart(&mut cx, "Resetting...\r\n");
                 cortex_m::peripheral::SCB::sys_reset();
@@ -120,22 +150,6 @@ fn get_line(buffer: &mut Deque<u8, BUFFER_SIZE>) -> Option<Vec<u8, BUFFER_SIZE>>
     Some(line)
 }
 
-fn print_uart(cx: &mut Context, str: &str) {
-    cx.shared.usart.lock(|tx| {
-        if tx.write_str(str).is_err() {
-            defmt::panic!("Failed to write to UART");
-        }
-    });
-}
-
-fn unknown_argument(cx: &mut Context, arg: &[u8]) {
-    print_uart(cx, "Unknown argument: '");
-    // SAFETY: b may not be valid UTF-8, but we don't care cause we're just printing it
-    // Also, including UTF8 checks would add a lot to the binary size
-    print_uart(cx, unsafe { core::str::from_utf8_unchecked(arg) });
-    print_uart(cx, "'\r\n");
-}
-
 #[inline]
 pub const fn is_newline(b: u8) -> bool {
     b == b'\n' || b == b'\r'
@@ -146,17 +160,75 @@ pub const fn is_whitespace(b: u8) -> bool {
     b == b' ' || b == b'\n' || b == b'\r' || b == b'\t'
 }
 
-const HELP_STR: &str = "Commands:\r
-    help\r
-    devices\r
-    resolution <9|10|11|12>?\r
-    pid\r
-    pid <kp> <ki> <kd>\r
-    temp\r
-    cooler <on|off>?\r
-    watch temp\r
-    dump temps\r
-    dump events\r
-    erase\r
-    reset\r
-";
+fn print_uart(cx: &mut Context, str: &str) {
+    cx.shared.usart.lock(|tx| print_uart_locked(tx, str));
+}
+
+fn print_uart_locked<W: Write>(tx: &mut W, str: &str) {
+    if tx.write_str(str).is_err() {
+        panic!("Failed to write to UART");
+    }
+}
+
+fn unknown_argument(cx: &mut Context, arg: &[u8]) {
+    cx.shared.usart.lock(|tx| {
+        print_uart_locked(tx, "Unknown argument: '");
+        // SAFETY: b may not be valid UTF-8, but we don't care cause we're just printing it
+        // Also, including UTF8 checks would add a lot to the binary size
+        print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(arg) });
+        print_uart_locked(tx, "'\r\n");
+    });
+}
+
+fn print_temp<W: Write>(tx: &mut W, temp: Temperature) {
+    const FRAC_TOTAL: u32 = 10u32.pow(Temperature::FRAC_NBITS);
+
+    let sign = temp.is_negative();
+
+    let int_part = temp.to_bits().unsigned_abs() >> Temperature::FRAC_NBITS;
+    let frac_part = temp.frac().to_bits().unsigned_abs();
+
+    let mut total = 0;
+    for i in 0..Temperature::FRAC_NBITS {
+        let bit = (frac_part >> i) & 1;
+        let value = FRAC_TOTAL / (1 << (Temperature::FRAC_NBITS - i));
+        total += bit * value;
+    }
+
+    trace!(
+        "int_part: {=u32}, total: {=u32}, sign: {=bool}",
+        int_part,
+        total,
+        sign
+    );
+
+    if sign {
+        print_uart_locked(tx, "-");
+    }
+    print_uint(tx, int_part);
+    print_uart_locked(tx, ".");
+    print_uint(tx, total);
+}
+
+fn print_uint<W: Write>(tx: &mut W, mut num: u32) {
+    const BUF_SIZE: usize = 10;
+
+    let mut buf = [0u8; BUF_SIZE];
+    let mut idx = 0;
+
+    loop {
+        let digit: u8 = (num % 10).as_();
+        num /= 10;
+
+        buf[BUF_SIZE - idx - 1] = b'0' + digit;
+        idx += 1;
+
+        if num == 0 {
+            break;
+        }
+    }
+
+    let buf = &buf[BUF_SIZE - idx..];
+    // SAFETY: buf is guaranteed to be valid ASCII
+    print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(buf) });
+}

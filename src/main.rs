@@ -242,22 +242,22 @@ mod app {
 
                     // Append to buffer
                     if buffer.push_back(b).is_err() {
-                        panic!("Buffer overflow");
+                        error!("Buffer overflow");
                     }
                 }
                 Err(nb::Error::WouldBlock) => break,
                 Err(nb::Error::Other(serial::Error::Framing)) => {
-                    panic!("USART error: Framing");
+                    error!("USART error: Framing");
                 }
-                Err(nb::Error::Other(serial::Error::Noise)) => panic!("USART error: Noise"),
+                Err(nb::Error::Other(serial::Error::Noise)) => error!("USART error: Noise"),
                 Err(nb::Error::Other(serial::Error::Overrun)) => {
-                    panic!("USART error: Overrun");
+                    error!("USART error: Overrun");
                 }
                 Err(nb::Error::Other(serial::Error::Parity)) => {
-                    panic!("USART error: Parity");
+                    error!("USART error: Parity");
                 }
 
-                Err(nb::Error::Other(_)) => defmt::panic!("USART error: Unknown"),
+                Err(nb::Error::Other(_)) => defmt::error!("USART error: Unknown"),
                 // Err(nb::Error::Other(e)) => core::panic!("USART error: {:?}", e),
             }
         });
