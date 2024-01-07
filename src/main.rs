@@ -199,7 +199,7 @@ mod app {
 
         loop {
             wdg.feed();
-            Mono::delay(100.millis()).await;
+            Mono::delay(500.millis()).await;
         }
     }
 
