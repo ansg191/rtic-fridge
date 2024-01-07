@@ -6,7 +6,6 @@
 
 mod controller;
 mod cooler;
-// mod delay;
 mod ds18b20;
 mod onewire;
 mod storage;
@@ -79,15 +78,15 @@ mod app {
 
     #[init]
     fn init(mut cx: init::Context) -> (Shared, Local) {
-        // Set system clock to 24 MHz
+        // Set system clock to 8 MHz
         let mut rcc = cx
             .device
             .RCC
             .configure()
-            .hsi48()
-            .sysclk(24.mhz())
-            .pclk(24.mhz())
-            .hclk(24.mhz())
+            // .hsi48()
+            .sysclk(8.mhz())
+            .pclk(8.mhz())
+            .hclk(8.mhz())
             .freeze(&mut cx.device.FLASH);
 
         trace!("sysclk: {}", rcc.clocks.sysclk().0);
@@ -96,7 +95,7 @@ mod app {
 
         // Enable tim2 monotonic
         let token = rtic_monotonics::create_stm32_tim2_monotonic_token!();
-        Mono::start(24_000_000, token);
+        Mono::start(8_000_000, token);
 
         // Setup systick delay
         let mut delay = Delay::new(cx.core.SYST, &rcc);
