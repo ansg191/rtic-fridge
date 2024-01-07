@@ -13,6 +13,7 @@ use stm32f0xx_hal::{delay::Delay, prelude::*};
 use crate::{
     controller::{pid::PidController, Controller},
     onewire::Error,
+    storage::{EventCode, StoredEvent},
     thermometer::Temperature,
 };
 
@@ -35,19 +36,31 @@ pub async fn temp_controller<'a>(
         let resolution = cx.shared.resolution.lock(|res| *res);
         if last_res != Some(resolution) {
             last_res = Some(resolution);
-            cx.local
-                .water_temp
-                .set_resolution(cx.local.wire, &mut delay, resolution)
-                .unwrap_or_else(|e| {
-                    error!("Error setting resolution: {}", e);
-                    last_res = None;
-                });
+            if let Err(e) =
+                cx.local
+                    .water_temp
+                    .set_resolution(cx.local.wire, &mut delay, resolution)
+            {
+                error!("Error setting resolution: {}", e);
+
+                let event = StoredEvent::now(EventCode::TempSensorError, e.as_str());
+                let _ = cx.local.e_tx.send(event).await;
+
+                last_res = None;
+            } else {
+                let event =
+                    StoredEvent::now(EventCode::TempSensorResolutionChanged, resolution.as_str());
+                let _ = cx.local.e_tx.send(event).await;
+            }
         }
 
         match temp_controller_inner(&mut cx, &mut delay).await {
             Ok(()) => {}
             Err(e) => {
                 error!("Error: {}", e);
+
+                let event = StoredEvent::now(EventCode::TempSensorError, e.as_str());
+                let _ = cx.local.e_tx.send(event).await;
             }
         }
 
@@ -62,10 +75,12 @@ async fn temp_controller_inner<'a>(
 ) -> Result<(), Error<Infallible>> {
     let temp = cx.local.water_temp.measure(cx.local.wire, delay).await?;
 
-    let cooler_on = cx.local.pid.run(temp).await.unwrap_or_else(|e| {
-        error!("Error running PID controller: {}", e);
-        false
-    });
+    let cooler_on = cx
+        .local
+        .pid
+        .run(temp)
+        .await
+        .unwrap_or_else(|_e| unreachable!("PID error"));
 
     debug!(
         "Temperature: {=f32}, Cooler: {=bool}",

@@ -432,6 +432,7 @@ dependencies = [
  "embedded-hal 0.2.7",
  "fixed",
  "fugit",
+ "futures-util",
  "heapless",
  "log",
  "nb 1.1.0",

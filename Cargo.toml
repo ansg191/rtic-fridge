@@ -22,6 +22,7 @@ embedded-hal = { version = "0.2.7", features = ["unproven"] }
 #embedded-hal-1 = { package = "embedded-hal", version = "1.0.0-rc.3" }
 fixed = { version = "1.24.0", features = ["num-traits"] }
 fugit = { version = "0.3.7", features = ["defmt"] }
+futures-util = { version = "0.3.30", default-features = false }
 heapless = "0.8.0"
 log = "0.4.20"
 nb = "1.1.0"
@@ -41,6 +42,7 @@ pid = { git = "https://github.com/braincore/pid-rs" }
 
 [profile.dev]
 opt-level = "z"
+lto = true
 
 [profile.release]
 opt-level = "z"

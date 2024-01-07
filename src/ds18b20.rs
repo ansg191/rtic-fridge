@@ -174,4 +174,13 @@ impl Resolution {
             Self::Bits12 => 750,
         }
     }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Bits9 => "9",
+            Self::Bits10 => "10",
+            Self::Bits11 => "11",
+            Self::Bits12 => "12",
+        }
+    }
 }

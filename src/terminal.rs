@@ -4,10 +4,12 @@ use defmt::{panic, unreachable, *};
 use embedded_hal::digital::v2::OutputPin;
 use heapless::{Deque, Vec};
 use num_traits::AsPrimitive;
-use rtic::Mutex;
+use rtic::{mutex_prelude::*, Mutex};
 use stm32f0xx_hal::prelude::*;
 
-use crate::{app::terminal::Context, ds18b20::Resolution, thermometer::Temperature};
+use crate::{
+    app::terminal::Context, ds18b20::Resolution, storage::Storage, thermometer::Temperature,
+};
 
 pub const BUFFER_SIZE: usize = 32;
 const OK_STR: &str = "<ok>\r\n";
@@ -56,33 +58,9 @@ pub async fn terminal(mut cx: Context<'_>) {
         match args.next() {
             None | Some(&[]) => trace!("Empty command"),
             Some(b"help") => print_uart(&mut cx, HELP_STR),
-            Some(b"resolution") => match args.next() {
-                None | Some(&[]) => match cx.shared.resolution.lock(|res| *res) {
-                    Resolution::Bits9 => print_uart(&mut cx, "9\r\n"),
-                    Resolution::Bits10 => print_uart(&mut cx, "10\r\n"),
-                    Resolution::Bits11 => print_uart(&mut cx, "11\r\n"),
-                    Resolution::Bits12 => print_uart(&mut cx, "12\r\n"),
-                },
-                Some(b"9") => {
-                    cx.shared.resolution.lock(|res| *res = Resolution::Bits9);
-                    print_uart(&mut cx, OK_STR);
-                }
-                Some(b"10") => {
-                    cx.shared.resolution.lock(|res| *res = Resolution::Bits10);
-                    print_uart(&mut cx, OK_STR);
-                }
-                Some(b"11") => {
-                    cx.shared.resolution.lock(|res| *res = Resolution::Bits11);
-                    print_uart(&mut cx, OK_STR);
-                }
-                Some(b"12") => {
-                    cx.shared.resolution.lock(|res| *res = Resolution::Bits12);
-                    print_uart(&mut cx, OK_STR);
-                }
-                Some(b) => unknown_argument(&mut cx, b),
-            },
+            Some(b"resolution") => resolution(&mut cx, args.next()),
             Some(b"temp") => {
-                let temp = cx.shared.storage.lock(|s| s.recent());
+                let temp = cx.shared.storage.lock(|s| s.temp_recent());
                 if let Some(temp) = temp {
                     cx.shared.usart.lock(|tx| {
                         print_uint(tx, temp.secs());
@@ -117,20 +95,8 @@ pub async fn terminal(mut cx: Context<'_>) {
                 Some(b"temps") => watch_temps(&mut cx).await,
                 Some(b) => unknown_argument(&mut cx, b),
             },
-            Some(b"dump") => match args.next() {
-                None | Some(&[]) => print_uart(&mut cx, "Missing argument\r\n"),
-                Some(b"temps") => cx.shared.storage.lock(|storage| {
-                    for temp in storage.oldest() {
-                        cx.shared.usart.lock(|tx| {
-                            print_uint(tx, temp.secs());
-                            print_uart_locked(tx, " ");
-                            print_temp(tx, temp.value());
-                            print_uart_locked(tx, "\r\n");
-                        });
-                    }
-                }),
-                Some(b) => unknown_argument(&mut cx, b),
-            },
+            Some(b"dump") => (&mut cx.shared.usart, &mut cx.shared.storage)
+                .lock(|tx, s| dump_storage(tx, s, args.next())),
             Some(b"reset") => {
                 print_uart(&mut cx, "Resetting...\r\n");
                 cortex_m::peripheral::SCB::sys_reset();
@@ -190,12 +156,16 @@ fn print_uart_locked<W: Write>(tx: &mut W, str: &str) {
 
 fn unknown_argument(cx: &mut Context, arg: &[u8]) {
     cx.shared.usart.lock(|tx| {
-        print_uart_locked(tx, "Unknown argument: '");
-        // SAFETY: b may not be valid UTF-8, but we don't care cause we're just printing it
-        // Also, including UTF8 checks would add a lot to the binary size
-        print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(arg) });
-        print_uart_locked(tx, "'\r\n");
+        unknown_argument_locked(tx, arg);
     });
+}
+
+fn unknown_argument_locked<W: Write>(tx: &mut W, arg: &[u8]) {
+    print_uart_locked(tx, "Unknown argument: '");
+    // SAFETY: b may not be valid UTF-8, but we don't care cause we're just printing it
+    // Also, including UTF8 checks would add a lot to the binary size
+    print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(arg) });
+    print_uart_locked(tx, "'\r\n");
 }
 
 fn print_temp<W: Write>(tx: &mut W, temp: Temperature) {
@@ -249,6 +219,63 @@ fn print_uint<W: Write>(tx: &mut W, mut num: u32) {
     let buf = &buf[BUF_SIZE - idx..];
     // SAFETY: buf is guaranteed to be valid ASCII
     print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(buf) });
+}
+
+fn resolution(cx: &mut Context<'_>, arg: Option<&[u8]>) {
+    match arg {
+        None | Some(&[]) => match cx.shared.resolution.lock(|res| *res) {
+            Resolution::Bits9 => print_uart(cx, "9\r\n"),
+            Resolution::Bits10 => print_uart(cx, "10\r\n"),
+            Resolution::Bits11 => print_uart(cx, "11\r\n"),
+            Resolution::Bits12 => print_uart(cx, "12\r\n"),
+        },
+        Some(b"9") => {
+            cx.shared.resolution.lock(|res| *res = Resolution::Bits9);
+            print_uart(cx, OK_STR);
+        }
+        Some(b"10") => {
+            cx.shared.resolution.lock(|res| *res = Resolution::Bits10);
+            print_uart(cx, OK_STR);
+        }
+        Some(b"11") => {
+            cx.shared.resolution.lock(|res| *res = Resolution::Bits11);
+            print_uart(cx, OK_STR);
+        }
+        Some(b"12") => {
+            cx.shared.resolution.lock(|res| *res = Resolution::Bits12);
+            print_uart(cx, OK_STR);
+        }
+        Some(b) => unknown_argument(cx, b),
+    }
+}
+
+fn dump_storage<W: Write, const N: usize, const E: usize>(
+    tx: &mut W,
+    storage: &Storage<N, E>,
+    arg: Option<&[u8]>,
+) {
+    match arg {
+        None | Some(&[]) => print_uart_locked(tx, "Missing argument\r\n"),
+        Some(b"temps") => {
+            for temp in storage.temp_oldest() {
+                print_uint(tx, temp.secs());
+                print_uart_locked(tx, " ");
+                print_temp(tx, temp.value());
+                print_uart_locked(tx, "\r\n");
+            }
+        }
+        Some(b"events") => {
+            for temp in storage.event_oldest() {
+                print_uint(tx, temp.secs());
+                print_uart_locked(tx, " ");
+                print_uart_locked(tx, temp.code.as_str());
+                print_uart_locked(tx, " ");
+                print_uart_locked(tx, temp.msg());
+                print_uart_locked(tx, "\r\n");
+            }
+        }
+        Some(b) => unknown_argument_locked(tx, b),
+    }
 }
 
 /// Watch temperatures until 's' is pressed

@@ -21,6 +21,10 @@ const WATER_TEMP_ADDR: onewire::Address = onewire::Address(0x05_00_00_0F_83_FB_6
 #[rtic::app(device = stm32f0xx_hal::pac, dispatchers = [USART1, TIM14])]
 mod app {
     use defmt::{panic, unreachable, *};
+    use futures_util::{
+        future::{try_select, Either},
+        pin_mut,
+    };
     use rtic_monotonics::{
         stm32::{Tim2 as Mono, *},
         Monotonic,
@@ -47,7 +51,7 @@ mod app {
         cooler::PinCooler,
         ds18b20::{Ds18b20, Resolution},
         onewire::OneWire,
-        storage::{Storage, StoredTemp, CHAN_SIZE},
+        storage::{Storage, StoredEvent, StoredTemp, CHAN_SIZE},
         terminal::is_newline,
         thermometer::Temperature,
         WATER_TEMP_ADDR,
@@ -59,7 +63,7 @@ mod app {
         buffer: heapless::Deque<u8, { crate::terminal::BUFFER_SIZE }>,
         cooler: PinCooler<Pin<Output<PushPull>>>,
         resolution: Resolution,
-        storage: Storage<100>,
+        storage: Storage<100, 16>,
     }
 
     #[local]
@@ -71,6 +75,7 @@ mod app {
         water_temp: Ds18b20,
         pid: PidController,
         tx: Sender<'static, Temperature, 1>,
+        e_tx: Sender<'static, StoredEvent, 1>,
 
         // Terminal
         rx: Receiver<'static, StoredTemp, CHAN_SIZE>,
@@ -145,12 +150,13 @@ mod app {
         // Setup channels
         let (tx1, rx1) = make_channel!(Temperature, 1);
         let (tx2, rx2) = make_channel!(StoredTemp, CHAN_SIZE);
+        let (e_tx, e_rx) = make_channel!(StoredEvent, 1);
 
         // Setup Storage
         let storage = Storage::new(tx2);
 
         // Launch storage task
-        let _ = storage::spawn(rx1);
+        let _ = storage::spawn(rx1, e_rx);
 
         (
             Shared {
@@ -167,6 +173,7 @@ mod app {
                 water_temp,
                 pid,
                 tx: tx1,
+                e_tx,
                 rx: rx2,
             },
         )
@@ -203,23 +210,41 @@ mod app {
         }
     }
 
-    #[task(priority = 2, local = [wire, water_temp, pid, tx], shared = [cooler, resolution])]
+    #[task(priority = 2, local = [wire, water_temp, pid, tx, e_tx], shared = [cooler, resolution])]
     async fn temp_controller(cx: temp_controller::Context, delay: Delay) {
         crate::temp_controller::temp_controller(cx, delay).await;
     }
 
     #[task(priority = 1, shared = [storage])]
-    async fn storage(mut cx: storage::Context, mut rx: Receiver<'static, Temperature, 1>) {
+    async fn storage(
+        mut cx: storage::Context,
+        mut rx: Receiver<'static, Temperature, 1>,
+        mut e_rx: Receiver<'static, StoredEvent, 1>,
+    ) {
         loop {
-            let temp = match rx.recv().await {
-                Ok(temp) => temp,
-                Err(ReceiveError::Empty) => continue,
-                Err(ReceiveError::NoSender) => unreachable!("Sender dropped"),
-            };
+            let t_fut = rx.recv();
+            let e_fut = e_rx.recv();
+            pin_mut!(t_fut, e_fut);
 
-            cx.shared.storage.lock(|storage| {
-                storage.write(temp);
-            });
+            match try_select(t_fut, e_fut).await {
+                Ok(Either::Left((temp, _))) => {
+                    cx.shared.storage.lock(|storage| {
+                        storage.write(temp);
+                    });
+                }
+                Ok(Either::Right((event, _))) => {
+                    cx.shared.storage.lock(|storage| {
+                        storage.write_event(event);
+                    });
+                }
+                Err(e) => {
+                    let (e, _) = e.factor_first();
+                    match e {
+                        ReceiveError::Empty => continue,
+                        ReceiveError::NoSender => unreachable!("Sender dropped"),
+                    }
+                }
+            }
         }
     }
 
