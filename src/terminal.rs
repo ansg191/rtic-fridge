@@ -199,7 +199,7 @@ fn unknown_argument(cx: &mut Context, arg: &[u8]) {
 }
 
 fn print_temp<W: Write>(tx: &mut W, temp: Temperature) {
-    const FRAC_TOTAL: u32 = 10u32.pow(Temperature::FRAC_NBITS);
+    const FRAC_TOTAL: u16 = 10u16.pow(Temperature::FRAC_NBITS);
 
     let sign = temp.is_negative();
 
@@ -214,7 +214,7 @@ fn print_temp<W: Write>(tx: &mut W, temp: Temperature) {
     }
 
     trace!(
-        "int_part: {=u32}, total: {=u32}, sign: {=bool}",
+        "int_part: {=u16}, total: {=u16}, sign: {=bool}",
         int_part,
         total,
         sign
@@ -223,9 +223,9 @@ fn print_temp<W: Write>(tx: &mut W, temp: Temperature) {
     if sign {
         print_uart_locked(tx, "-");
     }
-    print_uint(tx, int_part);
+    print_uint(tx, u32::from(int_part));
     print_uart_locked(tx, ".");
-    print_uint(tx, total);
+    print_uint(tx, u32::from(total));
 }
 
 fn print_uint<W: Write>(tx: &mut W, mut num: u32) {

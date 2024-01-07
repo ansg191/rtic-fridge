@@ -114,7 +114,7 @@ impl Ds18b20 {
         }
 
         let value = i16::from_le_bytes([buf[0], buf[1]]);
-        Ok(Temperature::from_bits(i32::from(value)))
+        Ok(Temperature::from_bits(value))
     }
 
     /// Asynchronously Measures the temperature
