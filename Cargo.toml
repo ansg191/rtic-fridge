@@ -15,29 +15,46 @@ panic-print = ["panic-probe/print-defmt"]
 sizing = []
 
 [dependencies]
+# Cortex-M features
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+# Debug logging
 defmt = { version = "0.3.5", features = ["encoding-rzcobs"] }
+# Logging defmt over RTT
 defmt-rtt = "0.4.0"
+# Embedded-hal traits
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 #embedded-hal-1 = { package = "embedded-hal", version = "1.0.0-rc.3" }
+# Fixed point arithmetic
 fixed = { version = "1.24.0", features = ["num-traits"] }
+# Duration & time for rtic-monotonics
 fugit = { version = "0.3.7", features = ["defmt"] }
+# Async/await utilities
 futures-util = { version = "0.3.30", default-features = false }
+# Stack-based heapless collections
 heapless = "0.8.0"
-log = "0.4.20"
+# Non-blocking IO for serial
 nb = "1.1.0"
+# Numeric traits for fixed point and PID
 num-traits = { version = "0.2.17", default-features = false }
+# Panic handler
 panic-probe = "0.3.1"
+# PID controller
 pid = "4.0.0"
+# RTIC
 rtic = { version = "2.0.1", features = ["thumbv6-backend"] }
+# RTIC monotonic timer using TIM2
 rtic-monotonics = { version = "1.4.1", features = ["stm32f042k6", "stm32_tim2"] }
+# RTIC channels
 rtic-sync = "1.1.1"
+# Ensuring sizes of types
 static_assertions = "1.1.0"
+# STM32F0 HAL
 stm32f0xx-hal = { version = "0.18.0", features = ["stm32f042", "rt"] }
-void = { version = "1.0.2", default-features = false }
 
 [patch.crates-io]
+# cortex-m has an outdated version of the `bare-metal` crate
 cortex-m = { git = "https://github.com/ansg191/cortex-m.git", branch = "v0.7.x" }
+# PID has an unreleased change that enables fixed-point numbers
 pid = { git = "https://github.com/braincore/pid-rs" }
 
 [profile.dev]
