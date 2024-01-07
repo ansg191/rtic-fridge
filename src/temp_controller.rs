@@ -2,8 +2,7 @@
 
 use core::convert::Infallible;
 
-use defmt::{panic, unreachable, *};
-use embedded_hal::blocking::delay::DelayUs;
+use defmt::{unreachable, *};
 use rtic::Mutex;
 use rtic_monotonics::{
     stm32::{Tim2 as Mono, *},
@@ -13,8 +12,8 @@ use stm32f0xx_hal::{delay::Delay, prelude::*};
 
 use crate::{
     controller::{pid::PidController, Controller},
-    onewire::{Address, Error},
-    thermometer::{ds18b20::Ds18b20Thermometer, Temperature},
+    onewire::Error,
+    thermometer::Temperature,
 };
 
 pub const TARGET_TEMP: Temperature = Temperature::const_from_int(5);
@@ -91,22 +90,4 @@ async fn temp_controller_inner<'a>(
 
 pub fn new_pid() -> PidController {
     PidController::new(TARGET_TEMP, KP, KI, KD)
-}
-
-pub fn add_devices<D: DelayUs<u32>, const N: usize>(therms: &mut Ds18b20Thermometer<D, N>) {
-    trace!("add_devices");
-    let mut addrs = heapless::Vec::<Address, 4>::new();
-
-    for addr in therms.devices() {
-        let addr = unwrap!(addr);
-        info!("Found device: {}", addr);
-
-        if addrs.push(addr).is_err() {
-            panic!("Failed to add device: OOM");
-        }
-    }
-
-    for addr in addrs {
-        unwrap!(therms.add(addr));
-    }
 }
