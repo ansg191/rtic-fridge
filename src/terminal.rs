@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use defmt::{panic, *};
+use defmt::{panic, unreachable, *};
 use embedded_hal::digital::v2::OutputPin;
 use heapless::{Deque, Vec};
 use num_traits::AsPrimitive;
@@ -20,7 +20,7 @@ const HELP_STR: &str = "Commands:\r
     pid <kp> <ki> <kd>\r
     temp\r
     cooler <on|off>?\r
-    watch temp\r
+    watch temps\r
     dump temps\r
     dump events\r
     erase\r
@@ -37,13 +37,13 @@ const HELP_STR: &str = "Commands:\r
 /// - `pid <kp> <ki> <kd>` - Set the PID values
 /// - `temp` - Get the current temperature
 /// - `cooler <on|off>?` - Turn the cooler on or off or get the current state
-/// - `watch temp` - Watch temperature until `s` is pressed
+/// - `watch temps` - Watch temperature until `s` is pressed
 /// - `dump temps` - Dump the temperature stored in flash
 /// - `dump events` - Dump the events stored in flash
 /// - `erase` - Erase the flash storage
 /// - `reset` - Reset the MCU
 #[cfg_attr(feature = "sizing", inline(never))]
-pub fn terminal(mut cx: Context<'_>) {
+pub async fn terminal(mut cx: Context<'_>) {
     loop {
         let Some(line) = cx.shared.buffer.lock(get_line) else {
             return;
@@ -83,11 +83,11 @@ pub fn terminal(mut cx: Context<'_>) {
             },
             Some(b"temp") => {
                 let temp = cx.shared.storage.lock(|s| s.recent());
-                if let Some((secs, temp)) = temp {
+                if let Some(temp) = temp {
                     cx.shared.usart.lock(|tx| {
-                        print_uint(tx, secs);
+                        print_uint(tx, temp.secs());
                         print_uart_locked(tx, " ");
-                        print_temp(tx, temp);
+                        print_temp(tx, temp.value());
                         print_uart_locked(tx, "\r\n");
                     });
                 } else {
@@ -112,14 +112,19 @@ pub fn terminal(mut cx: Context<'_>) {
                 }
                 Some(b) => unknown_argument(&mut cx, b),
             },
+            Some(b"watch") => match args.next() {
+                None | Some(&[]) => print_uart(&mut cx, "Missing argument\r\n"),
+                Some(b"temps") => watch_temps(&mut cx).await,
+                Some(b) => unknown_argument(&mut cx, b),
+            },
             Some(b"dump") => match args.next() {
                 None | Some(&[]) => print_uart(&mut cx, "Missing argument\r\n"),
                 Some(b"temps") => cx.shared.storage.lock(|storage| {
-                    for (secs, temp) in storage.oldest() {
+                    for temp in storage.oldest() {
                         cx.shared.usart.lock(|tx| {
-                            print_uint(tx, secs);
+                            print_uint(tx, temp.secs());
                             print_uart_locked(tx, " ");
-                            print_temp(tx, temp);
+                            print_temp(tx, temp.value());
                             print_uart_locked(tx, "\r\n");
                         });
                     }
@@ -244,4 +249,37 @@ fn print_uint<W: Write>(tx: &mut W, mut num: u32) {
     let buf = &buf[BUF_SIZE - idx..];
     // SAFETY: buf is guaranteed to be valid ASCII
     print_uart_locked(tx, unsafe { core::str::from_utf8_unchecked(buf) });
+}
+
+/// Watch temperatures until 's' is pressed
+async fn watch_temps(cx: &mut Context<'_>) {
+    print_uart(cx, "Press 's' to stop watching\r\n");
+    loop {
+        // Wait for storage to re-send a temperature
+        let Ok(temp) = cx.local.rx.recv().await else {
+            unreachable!("Sender dropped")
+        };
+
+        // Print temperature to UART
+        cx.shared.usart.lock(|tx| {
+            print_uint(tx, temp.secs());
+            print_uart_locked(tx, " ");
+            print_temp(tx, temp.value());
+            print_uart_locked(tx, "\r\n");
+        });
+
+        // Check if 's' is in the buffer and stop if it is
+        // Also, clear the buffer to prevent it from overflowing
+        let to_break = cx.shared.buffer.lock(|buffer| {
+            let to_break = buffer.iter().any(|b| *b == b's');
+
+            // Clear buffer
+            buffer.clear();
+
+            to_break
+        });
+        if to_break {
+            break;
+        }
+    }
 }

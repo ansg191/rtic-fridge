@@ -48,7 +48,7 @@ mod app {
         cooler::PinCooler,
         ds18b20::{Ds18b20, Resolution},
         onewire::OneWire,
-        storage::Storage,
+        storage::{Storage, StoredTemp, CHAN_SIZE},
         terminal::is_newline,
         thermometer::Temperature,
         WATER_TEMP_ADDR,
@@ -72,6 +72,9 @@ mod app {
         water_temp: Ds18b20,
         pid: PidController,
         tx: Sender<'static, Temperature, 1>,
+
+        // Terminal
+        rx: Receiver<'static, StoredTemp, CHAN_SIZE>,
     }
 
     #[init]
@@ -141,13 +144,14 @@ mod app {
         let _ = temp_controller::spawn(delay);
 
         // Setup channels
-        let (tx, rx) = make_channel!(Temperature, 1);
+        let (tx1, rx1) = make_channel!(Temperature, 1);
+        let (tx2, rx2) = make_channel!(StoredTemp, CHAN_SIZE);
 
         // Setup Storage
-        let storage = Storage::new();
+        let storage = Storage::new(tx2);
 
         // Launch storage task
-        let _ = storage::spawn(rx);
+        let _ = storage::spawn(rx1);
 
         (
             Shared {
@@ -163,7 +167,8 @@ mod app {
                 wire,
                 water_temp,
                 pid,
-                tx,
+                tx: tx1,
+                rx: rx2,
             },
         )
     }
@@ -219,9 +224,9 @@ mod app {
         }
     }
 
-    #[task(priority = 2, shared = [usart, buffer, cooler, resolution, storage])]
+    #[task(priority = 2, local = [rx], shared = [usart, buffer, cooler, resolution, storage])]
     async fn terminal(cx: terminal::Context) {
-        crate::terminal::terminal(cx);
+        crate::terminal::terminal(cx).await;
     }
 
     #[task(binds = USART2, local = [times: u32 = 0], shared = [usart, buffer])]
