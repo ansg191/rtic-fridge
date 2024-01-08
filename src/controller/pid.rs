@@ -15,7 +15,7 @@ impl PidController {
         ki: impl Into<Temperature>,
         kd: impl Into<Temperature>,
     ) -> Self {
-        const LIMIT: Temperature = Temperature::const_from_int(100);
+        const LIMIT: Temperature = Temperature::const_from_int(128);
 
         let mut pid = Pid::new(target, LIMIT);
         pid.p(kp, LIMIT);
@@ -37,8 +37,14 @@ impl super::Controller for PidController {
         self.pid.setpoint
     }
 
-    async fn run(&mut self, temp: Temperature) -> Result<bool, Self::Error> {
+    async fn run(&mut self, temp: Temperature) -> Result<u8, Self::Error> {
         let output = self.pid.next_control_output(temp);
-        Ok(output.output.is_negative())
+
+        // Map output from range (-128, 128) to (0, 255)
+        let output = output
+            .output
+            .saturating_add(Temperature::const_from_int(128))
+            .saturating_to_num();
+        Ok(output)
     }
 }

@@ -15,6 +15,7 @@ pub trait Controller {
 
     /// Run the controller for a single tick
     ///
-    /// Returns `true` if the cooler should be on, `false` otherwise.
-    async fn run(&mut self, temp: Temperature) -> Result<bool, Self::Error>;
+    /// Returns 0 if cooler should be completely off, 255 if cooler should be completely on, or
+    /// somewhere in between.
+    async fn run(&mut self, temp: Temperature) -> Result<u8, Self::Error>;
 }

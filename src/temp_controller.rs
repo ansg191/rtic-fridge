@@ -22,12 +22,8 @@ const KP: Temperature = Temperature::from_bits(1 << 4);
 const KI: Temperature = Temperature::from_bits(1 << 2);
 const KD: Temperature = Temperature::from_bits(1 << 1);
 
-#[allow(clippy::needless_lifetimes, reason = "clippy bug")]
 #[cfg_attr(feature = "sizing", inline(never))]
-pub async fn temp_controller<'a>(
-    mut cx: crate::app::temp_controller::Context<'a>,
-    mut delay: Delay,
-) {
+pub async fn temp_controller(mut cx: crate::app::temp_controller::Context<'_>, mut delay: Delay) {
     let mut now = Mono::now();
 
     let mut last_res = None;
@@ -83,13 +79,13 @@ async fn temp_controller_inner<'a>(
         .unwrap_or_else(|_e| unreachable!("PID error"));
 
     debug!(
-        "Temperature: {=f32}, Cooler: {=bool}",
+        "Temperature: {=f32}, Cooler: {=u8}",
         temp.to_num::<f32>(),
         cooler_on
     );
 
     cx.shared.cooler.lock(|cooler| {
-        if cooler_on {
+        if cooler_on > 127 {
             cooler.set_high()
         } else {
             cooler.set_low()
