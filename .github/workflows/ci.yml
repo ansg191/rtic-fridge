@@ -33,3 +33,33 @@ jobs:
           components: rustfmt
       - name: Rustfmt
         run: cargo fmt --all -- --check
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: thumbv6m-none-eabi
+          components: rust-src,llvm-tools-preview
+      - uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-binutils
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Print Size
+        id: print_size
+        run: |
+          cargo size --release | tail -n +2 | awk '{printf "size=%d B", $1}' >> $GITHUB_OUTPUT
+
+      - uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 557b7b9cfe676e4097be5a69d354f42b
+          filename: badge.json
+          label: Text Size
+          message: ${{ steps.print_size.outputs.size }}
+          color: green
