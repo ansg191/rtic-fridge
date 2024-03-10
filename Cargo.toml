@@ -43,7 +43,7 @@ pid = "4.0.0"
 # RTIC
 rtic = { version = "2.0.1", features = ["thumbv6-backend"] }
 # RTIC monotonic timer using TIM2
-rtic-monotonics = { version = "1.4.1", features = ["stm32f042k6", "stm32_tim2"] }
+rtic-monotonics = { version = "1.5.0", features = ["stm32f042k6", "stm32_tim2"] }
 # RTIC channels
 rtic-sync = "1.1.1"
 # Ensuring sizes of types
