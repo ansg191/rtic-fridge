@@ -4,7 +4,7 @@ use defmt::{panic, unreachable, *};
 use embedded_hal::digital::v2::OutputPin;
 use heapless::{Deque, Vec};
 use num_traits::AsPrimitive;
-use rtic::{mutex_prelude::*, Mutex};
+use rtic::mutex_prelude::*;
 use stm32f0xx_hal::prelude::*;
 
 use crate::{
