@@ -471,9 +471,9 @@ dependencies = [
 
 [[package]]
 name = "rtic-sync"
-version = "1.1.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e8096150c2797823c1eedb84423acd3e56e8a4af48cbc04dcf240813ce7c875"
+checksum = "5a243123bcfb0bbbbf27b89c13de35670875a8725ec69763062e8a5903e69e93"
 dependencies = [
  "critical-section",
  "heapless",
