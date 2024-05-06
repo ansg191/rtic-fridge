@@ -35,7 +35,7 @@ heapless = "0.8.0"
 # Non-blocking IO for serial
 nb = "1.1.0"
 # Numeric traits for fixed point and PID
-num-traits = { version = "0.2.18", default-features = false }
+num-traits = { version = "0.2.19", default-features = false }
 # Panic handler
 panic-probe = "0.3.1"
 # PID controller
