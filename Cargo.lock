@@ -177,9 +177,18 @@ dependencies = [
 
 [[package]]
 name = "embedded-hal"
-version = "1.0.0-rc.3"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc402f79e1fd22731ca945b4f97b5ff37e7b3f379312595c42bb2e8811c29920"
+checksum = "361a90feb7004eca4019fb28352a9465666b24f840f5c3cddf0ff13920590b89"
+
+[[package]]
+name = "embedded-hal-async"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c4c685bbef7fe13c3c6dd4da26841ed3980ef33e841cddfa15ce8a8fb3f1884"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
 
 [[package]]
 name = "equivalent"
@@ -454,14 +463,13 @@ dependencies = [
 
 [[package]]
 name = "rtic-monotonics"
-version = "1.4.1"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83175938634a0fb86facfc5bf4dd172317b26c4e91056438f27df093626b233f"
+checksum = "64cbd4936c91785e1ae482a65d54edafbc729d4fa708e9578cfa64d4842c3d56"
 dependencies = [
  "atomic-polyfill",
  "cfg-if",
  "cortex-m",
- "embedded-hal 1.0.0-rc.3",
  "fugit",
  "proc-macro2",
  "quote",
@@ -483,11 +491,14 @@ dependencies = [
 
 [[package]]
 name = "rtic-time"
-version = "1.2.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f3a0f0828950e308af95960b75fb4284b0c404b1e334ae0abe13f52b7650ab"
+checksum = "a7b1d853fa50dc125695414ce4510567a0d420221e455b1568cfa8c9aece9614"
 dependencies = [
  "critical-section",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+ "fugit",
  "futures-util",
  "rtic-common",
 ]
@@ -521,9 +532,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stm32-metapac"
-version = "14.0.0"
+version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b85756ab725cbe215e8b76458bb4169e3d6b6f32d6fbda32046f65e37a757e3"
+checksum = "deabea56a8821dcea05d0109f3ab3135f31eb572444e5da203d06149c594c8c6"
 dependencies = [
  "cortex-m",
 ]
